@@ -187,6 +187,11 @@ New checks
   Replaces certain conditional statements with equivalent calls to
   ``std::min`` or ``std::max``.
 
+- New :doc:`tfg-NoReturnPositionMakeShared
+  <clang-tidy/checks/tfg/NoReturnPositionMakeShared>` check.
+
+  FIXME: add release notes.
+
 New check aliases
 ^^^^^^^^^^^^^^^^^
 

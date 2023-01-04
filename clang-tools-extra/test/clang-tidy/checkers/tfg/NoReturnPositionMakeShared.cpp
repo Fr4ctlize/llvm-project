@@ -10,8 +10,9 @@ namespace tests {
 
 	std::shared_ptr<int> returnVarMakeShared() {
 		auto var = std::make_shared<int>(42);
+		std::shared_ptr<int> var2 = std::make_shared<int>(36);
 		*var = 99;
-		return var;
+		return var2;
 	}
 
 	template<typename T>

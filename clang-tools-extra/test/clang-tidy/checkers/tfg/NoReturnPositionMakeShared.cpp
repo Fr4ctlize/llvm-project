@@ -8,11 +8,38 @@ namespace tests {
 		return std::make_shared<int>(42);
 	}
 
-	std::shared_ptr<int> returnVarMakeShared() {
-		auto var = std::make_shared<int>(42);
+	std::shared_ptr<int> returnSharedPtr() {
+		std::shared_ptr<int> var = std::make_shared<int>(42);
 		std::shared_ptr<int> var2 = std::make_shared<int>(36);
-		*var = 99;
+		*var2 = 99;
 		return var2;
+	}
+
+	std::shared_ptr<int> returnSharedPtrDelayedInit() {
+		std::shared_ptr<int> var;
+		var = std::make_shared<int>(42);
+		return var;
+	}
+
+	template<typename T>
+	void consumeSharedPtr(std::shared_ptr<T> p) {
+
+	}
+
+	std::shared_ptr<int> returnConsumedSharedPtr() {
+		std::shared_ptr<int> var = std::make_shared<int>(42);
+		consumeSharedPtr(var);
+		return var;
+	}
+
+	std::shared_ptr<char *> returnVarMakeSharedWithBranch(const int a) {
+		if (a % 64 == 0) {
+			std::shared_ptr<char *> var = std::make_shared<char *>(new char[] {"hello world"});
+			return var;
+		} else {
+			std::shared_ptr<char *> var = std::make_shared<char *>(new char[] {"SALVE MUNDE"});
+			return var;
+		}
 	}
 
 	template<typename T>

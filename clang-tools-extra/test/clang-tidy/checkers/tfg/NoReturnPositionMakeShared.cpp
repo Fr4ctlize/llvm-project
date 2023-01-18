@@ -4,35 +4,63 @@
 namespace tests {
 
 	// FIXME: Add something that triggers the check here.
-	std::shared_ptr<int> returnPositionMakeSharedTest() {
+	std::shared_ptr<int> returnMakeShared() {
 		return std::make_shared<int>(42);
 	}
 
-	std::shared_ptr<int> returnSharedPtr() {
+	std::shared_ptr<int> returnSharedPtrVar() {
+		std::shared_ptr<int> var = std::make_shared<int>(42);
+		return var;
+	}
+
+	std::shared_ptr<int> returnSecondSharedPtrVar() {
 		std::shared_ptr<int> var = std::make_shared<int>(42);
 		std::shared_ptr<int> var2 = std::make_shared<int>(36);
-		*var2 = 99;
 		return var2;
 	}
 
-	std::shared_ptr<int> returnSharedPtrDelayedInit() {
+	std::shared_ptr<int> returnModifiedSharedPtrVar() {
+		std::shared_ptr<int> var = std::make_shared<int>(42);
+		*var = 99;
+		return var;
+	}
+
+	std::shared_ptr<int> returnSharedPtrVarWithSharedPtrMemberCall() {
+		std::shared_ptr<int> var = std::make_shared<int>(42);
+		var.use_count();
+		return var;
+	}
+
+	std::shared_ptr<int> returnSharedPtrWithDelayedInit() {
 		std::shared_ptr<int> var;
 		var = std::make_shared<int>(42);
 		return var;
 	}
 
-	template<typename T>
-	void consumeSharedPtr(std::shared_ptr<T> p) {
-
+	std::shared_ptr<int> returnReassignedSharedPtr() {
+		auto var = std::make_shared<int>(36);
+		var = std::make_shared<int>(17);
+		return var;
 	}
 
-	std::shared_ptr<int> returnConsumedSharedPtr() {
+	template<typename T>
+	void consumeSharedPtr(std::shared_ptr<T> p) { }
+
+	std::shared_ptr<int> returnEscapingSharedPtr() {
 		std::shared_ptr<int> var = std::make_shared<int>(42);
 		consumeSharedPtr(var);
 		return var;
 	}
 
-	std::shared_ptr<char *> returnVarMakeSharedWithBranch(const int a) {
+	std::shared_ptr<char *> returnMakeSharedWithBranch(const int a) {
+		if (a % 64 == 0) {
+			return std::make_shared<char *>(new char[] {"hello world"});
+		} else {
+			return std::make_shared<char *>(new char[] {"SALVE MUNDE"});
+		}
+	}
+
+	std::shared_ptr<char *> returnSharedPtrBranching(const int a) {
 		if (a % 64 == 0) {
 			std::shared_ptr<char *> var = std::make_shared<char *>(new char[] {"hello world"});
 			return var;

@@ -20,6 +20,8 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/Error.h"
 
+#include <string>
+
 using namespace ::clang::ast_matchers;
 using namespace ::clang::transformer;
 
@@ -27,117 +29,182 @@ namespace clang {
 namespace tidy {
 namespace tfg {
 
-using MatchResult = MatchFinder::MatchResult;
-
-static Expected<DynTypedNode> getNode(const ast_matchers::BoundNodes &Nodes,
-                                      StringRef ID) {
-  auto &NodesMap = Nodes.getMap();
-  auto It = NodesMap.find(ID);
-  if (It == NodesMap.end())
-    return llvm::make_error<llvm::StringError>(llvm::errc::invalid_argument, "ID not bound: " + ID);
-  return It->second;
-}
-
-auto nameWithoutTemplateArgs(std::string ID) -> RangeSelector {
-  return [ID](const MatchResult &Result) -> Expected<CharSourceRange> {
-    Expected<DynTypedNode> N = getNode(Result.Nodes, ID);
-    if (!N)
-      return N.takeError();
-    auto &Node = *N;
-    if (const auto *TST = Node.get<TemplateSpecializationTypeLoc>()) {
-      // if (const auto TST = T->getNamedTypeLoc().getAs<TemplateSpecializationTypeLoc>()) {
-        auto range = TST->getSourceRange();
-        range.setEnd(TST->getTemplateNameLoc());
-        return CharSourceRange::getTokenRange(range);
-      // }
-    }
-    return name(ID)(Result);
-  };
-}
-
 auto preferUniquePtrOverSharedPtr() -> RewriteRuleWith<std::string> {
-  auto msg = cat("Prefer ``make_unique`` over ``make_shared``");
+  const auto meta = cat("Prefer ``unique_ptr`` over ``shared_ptr``");
+  const std::string sharedPtr = "::std::shared_ptr",
+                    makeShared = "::std::make_shared",
+                    operatorEq = "operator=",
+                    makeSharedInvocation = "makeSharedInvocation",
+                    varTypeSpec = "varTypeSpec",
+                    funcTypeSpec = "funcTypeSpec",
+                    varInitWithMakeShared = "varInitWithMakeShared",
+                    varAssignedToWithMakeShared = "varAssignedToWithMakeShared",
+                    candidateFunction = "candidateFunction",
+                    makeUniqueName = "make_unique",
+                    uniquePtrName = "unique_ptr",
+                    sharedPtrVar = "sharedPtrVar";
 
   auto SharedPtrDecl =
-    cxxRecordDecl(hasName("::std::shared_ptr"));
+    cxxRecordDecl(hasName(sharedPtr));
 
   auto MakeSharedDecl =
-    functionDecl(hasName("::std::make_shared"));
+    functionDecl(hasName(makeShared));
 
   auto OperatorEqualsDecl =
-    functionDecl(hasName("operator="));
+    functionDecl(hasName(operatorEq));
 
   auto MakeSharedCallExpr =
     callExpr(
       callee(MakeSharedDecl),
       has(
-        declRefExpr().bind("make_shared_invocation")));
+        declRefExpr().bind(makeSharedInvocation)));
 
   auto ReturnsMakeShared =
     returnStmt(hasReturnValue(MakeSharedCallExpr));
 
-  auto SharedPtrTypeLoc =
+  auto OfSharedPtrType =
     allOf(
       hasType(SharedPtrDecl),
-      hasTypeLoc(
-        elaboratedTypeLoc(
-          hasNamedTypeLoc(
-            templateSpecializationTypeLoc().bind("varTypeSpec")))));
+      optionally(
+        hasTypeLoc(
+          elaboratedTypeLoc(
+            hasNamedTypeLoc(
+              templateSpecializationTypeLoc().bind(varTypeSpec))))));
 
   auto InitWithMakeShared =
     hasInitializer(MakeSharedCallExpr);
 
-  auto VarInitWithMakeShared =
+  auto IsReturnedByOwningFunction =
+    hasAncestor(
+      decl(
+        equalsBoundNode(candidateFunction),
+        hasDescendant(
+          returnStmt(
+            hasReturnValue(
+              declRefExpr(
+                to(
+                  decl(equalsBoundNode(sharedPtrVar)))))))));
+  
+  auto ForEachAssignmentOfMakeShared =
+    hasAncestor(
+      decl(
+        equalsBoundNode(candidateFunction),
+          forEachDescendant(
+            cxxOperatorCallExpr(
+              has(
+                declRefExpr(to(OperatorEqualsDecl))),
+              has(
+                declRefExpr(
+                  to(
+                    varDecl(
+                      equalsBoundNode(sharedPtrVar))))),
+              has(MakeSharedCallExpr)))));
+
+  auto ReturnedSharedPtrVar =
     varDecl(
-      InitWithMakeShared,
-      optionally(SharedPtrTypeLoc)).bind("varInitWithMakeShared");
+      OfSharedPtrType,
+      decl().bind(sharedPtrVar),
+      IsReturnedByOwningFunction,
+      eachOf(
+        InitWithMakeShared,
+        ForEachAssignmentOfMakeShared));
 
-  auto VarAssignedMakeShared =
-    cxxOperatorCallExpr(
-      has(
-        declRefExpr(to(OperatorEqualsDecl))),
-      has(
-        declRefExpr(
-          to(varDecl(optionally(SharedPtrTypeLoc)).bind("varAssignedToWithMakeShared")))),
-      has(MakeSharedCallExpr));
+  auto ReturnsSharedPtr =
+    allOf(
+      returns(
+        hasDeclaration(SharedPtrDecl)),
+      optionally(hasReturnTypeLoc(typeLoc().bind(funcTypeSpec))));
 
-  auto ReturnsReferenceToDecl =
+  auto SharedPtrLocal =
+    varDecl().bind(sharedPtrVar);
+
+  auto RefToSharedPtrLocal =
+    declRefExpr(
+      to(
+        decl(
+          equalsBoundNode(sharedPtrVar))));
+
+  auto ReturnedSharedPtrLocal =
     returnStmt(
-      hasReturnValue(
-        declRefExpr(
-          to(decl(
-            anyOf(
-              equalsBoundNode("varInitWithMakeShared"),
-              equalsBoundNode("varAssignedToWithMakeShared")))))));
+      hasReturnValue(RefToSharedPtrLocal));
 
-  auto ReturnSharedPtrVar =
+  auto IsInCompilerStd =
+    allOf(
+      isInStdNamespace(),
+      isExpansionInSystemHeader());
+
+  auto CalleeIsSafe =
+    callee(
+      declRefExpr(
+        to(
+          anyOf(
+            functionDecl(IsInCompilerStd),
+            cxxMethodDecl(
+              ofClass(
+                decl(IsInCompilerStd)))))));
+
+  auto FunctionEscapePoint =
+    callExpr(
+      hasAnyArgument(
+        RefToSharedPtrLocal),
+      unless(CalleeIsSafe));
+
+  auto MemberCalleeIsSafe =
+    has(
+      memberExpr(
+        hasDeclaration(
+          cxxMethodDecl(
+            unless(
+              anyOf(
+                hasName("use_count"),
+                hasName("unique"),
+                hasName("owner_before")))))));
+
+  auto MemberCallEscapePoint =
+    cxxMemberCallExpr(
+      onImplicitObjectArgument(
+        hasType(SharedPtrDecl)),
+      hasDescendant(RefToSharedPtrLocal.bind("refToLocal")),
+      unless(MemberCalleeIsSafe));
+
+  auto HasEscapePoint =
+    anyOf(
+      hasDescendant(FunctionEscapePoint),
+      hasDescendant(MemberCallEscapePoint));
+
+  auto HasEscapingReturnedSharedPtrVar =
+    allOf(
+      forEachDescendant(SharedPtrLocal),
+      hasDescendant(ReturnedSharedPtrLocal),
+      HasEscapePoint);
+
+  auto CandidateFunction =
     functionDecl(
-      anyOf(
-        forEachDescendant(
-          VarInitWithMakeShared),
-        forEachDescendant(
-          VarAssignedMakeShared)),
-      hasDescendant(ReturnsReferenceToDecl));
+      ReturnsSharedPtr,
+      unless(HasEscapingReturnedSharedPtrVar)).bind(candidateFunction);
+  
+  auto RuleRewriteReturnedMakeShared =
+    makeRule(
+      traverse(TK_IgnoreUnlessSpelledInSource, ReturnsMakeShared),
+      changeTo(name(makeSharedInvocation), cat(makeUniqueName)));
+  
+  auto RuleRewriteVarTypeAndAssignedMakeShared =
+    makeRule(
+      traverse(TK_IgnoreUnlessSpelledInSource, ReturnedSharedPtrVar),
+      flatten(
+        edit(changeTo(name(makeSharedInvocation), cat(makeUniqueName))),
+        ifBound(varTypeSpec, changeTo(name(varTypeSpec), cat(uniquePtrName)))));
 
-  auto RuleUntemplatedRPMS = makeRule(
-    traverse(TK_IgnoreUnlessSpelledInSource,
-      returnStmt(
-        hasReturnValue(MakeSharedCallExpr))),
-    changeTo(name("make_shared_invocation"), cat("make_unique")),
-    msg
-  );
-
-  auto RuleUntemplatedReturnSharedPtrVar = makeRule(
-    traverse(TK_IgnoreUnlessSpelledInSource, ReturnSharedPtrVar),
-    flatten(
-      edit(changeTo(name("make_shared_invocation"), cat("make_unique"))),
-      ifBound("varTypeSpec", changeTo(nameWithoutTemplateArgs("varTypeSpec"), cat("unique_ptr")))),
-    msg
-  );
+  auto RuleUntemplatedReplaceSharedWithUnique = makeRule(
+    traverse(TK_IgnoreUnlessSpelledInSource, CandidateFunction),
+    flattenVector({
+      ifBound(funcTypeSpec, changeTo(name(funcTypeSpec), cat(uniquePtrName))),
+      rewriteDescendants(candidateFunction, RuleRewriteReturnedMakeShared),
+      rewriteDescendants(candidateFunction, RuleRewriteVarTypeAndAssignedMakeShared)}),
+    meta);
 
   return applyFirst({
-    RuleUntemplatedRPMS,
-    RuleUntemplatedReturnSharedPtrVar,
+    RuleUntemplatedReplaceSharedWithUnique
   });
 }
 

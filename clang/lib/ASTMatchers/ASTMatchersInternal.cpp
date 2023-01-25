@@ -87,11 +87,9 @@ bool matchesAnyBase(const CXXRecordDecl &Node,
       [Finder, Builder, &BaseSpecMatcher](const CXXBaseSpecifier *BaseSpec,
                                           CXXBasePath &IgnoredParam) {
         BoundNodesTreeBuilder Result(*Builder);
-        if (BaseSpecMatcher.matches(*BaseSpec, Finder, &Result)) {
-          *Builder = std::move(Result);
-          return true;
-        }
-        return false;
+        bool MatchFound = BaseSpecMatcher.matches(*BaseSpec, Finder, Builder);
+        *Builder = std::move(Result);
+        return MatchFound;
       };
 
   return Node.lookupInBases(basePredicate, Paths,

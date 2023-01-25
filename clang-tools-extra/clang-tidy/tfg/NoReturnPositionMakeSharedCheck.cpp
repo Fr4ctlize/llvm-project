@@ -7,18 +7,18 @@
 //===----------------------------------------------------------------------===//
 
 #include "NoReturnPositionMakeSharedCheck.h"
+
 #include "clang/AST/ASTContext.h"
 #include "clang/ASTMatchers/ASTMatchFinder.h"
-#include "clang/Tooling/Transformer/RewriteRule.h"
 #include "clang/Tooling/Transformer/RangeSelector.h"
+#include "clang/Tooling/Transformer/RewriteRule.h"
 #include "clang/Tooling/Transformer/Stencil.h"
 
-#include "clang/Basic/LangOptions.h"
 #include "clang/AST/PrettyPrinter.h"
-
+#include "clang/Basic/LangOptions.h"
 #include "llvm/ADT/StringRef.h"
-#include "llvm/Support/Debug.h"
 #include "llvm/Support/Error.h"
+#include "llvm/Support/Debug.h"
 
 #include <string>
 
@@ -30,7 +30,7 @@ namespace tidy {
 namespace tfg {
 
 auto preferUniquePtrOverSharedPtr() -> RewriteRuleWith<std::string> {
-  const auto meta = cat("Prefer ``unique_ptr`` over ``shared_ptr``");
+  const auto meta = cat("prefer ``unique_ptr`` over ``shared_ptr`` as a return type for factory functions");
   const std::string sharedPtr = "::std::shared_ptr",
                     makeShared = "::std::make_shared",
                     operatorEq = "operator=",
@@ -39,10 +39,12 @@ auto preferUniquePtrOverSharedPtr() -> RewriteRuleWith<std::string> {
                     funcTypeSpec = "funcTypeSpec",
                     varInitWithMakeShared = "varInitWithMakeShared",
                     varAssignedToWithMakeShared = "varAssignedToWithMakeShared",
+                    operatorClassTemplate = "operatorClassTemplate",
+                    returnedVar = "returnedVar",
                     candidateFunction = "candidateFunction",
                     makeUniqueName = "make_unique",
                     uniquePtrName = "unique_ptr",
-                    sharedPtrVar = "sharedPtrVar";
+                    localVar = "localVar";
 
   auto SharedPtrDecl =
     cxxRecordDecl(hasName(sharedPtr));
@@ -83,7 +85,7 @@ auto preferUniquePtrOverSharedPtr() -> RewriteRuleWith<std::string> {
             hasReturnValue(
               declRefExpr(
                 to(
-                  decl(equalsBoundNode(sharedPtrVar)))))))));
+                  decl(equalsBoundNode(localVar)))))))));
   
   auto ForEachAssignmentOfMakeShared =
     hasAncestor(
@@ -97,13 +99,13 @@ auto preferUniquePtrOverSharedPtr() -> RewriteRuleWith<std::string> {
                 declRefExpr(
                   to(
                     varDecl(
-                      equalsBoundNode(sharedPtrVar))))),
+                      equalsBoundNode(localVar))))),
               has(MakeSharedCallExpr)))));
 
   auto ReturnedSharedPtrVar =
     varDecl(
       OfSharedPtrType,
-      decl().bind(sharedPtrVar),
+      decl().bind(localVar),
       IsReturnedByOwningFunction,
       eachOf(
         InitWithMakeShared,
@@ -115,72 +117,119 @@ auto preferUniquePtrOverSharedPtr() -> RewriteRuleWith<std::string> {
         hasDeclaration(SharedPtrDecl)),
       optionally(hasReturnTypeLoc(typeLoc().bind(funcTypeSpec))));
 
-  auto SharedPtrLocal =
-    varDecl().bind(sharedPtrVar);
+  auto ReturnsFunctionParameter = 
+    allOf(
+      forEachDescendant(
+        returnStmt(
+          hasReturnValue(
+            declRefExpr(
+              to(
+                decl().bind(returnedVar)))))),
+      hasAnyParameter(
+        decl(equalsBoundNode(returnedVar))));
 
-  auto RefToSharedPtrLocal =
+  auto LocalVar =
+    varDecl().bind(localVar);
+
+  auto RefToLocalVar =
     declRefExpr(
       to(
         decl(
-          equalsBoundNode(sharedPtrVar))));
+          equalsBoundNode(localVar))));
 
-  auto ReturnedSharedPtrLocal =
+  auto ReturnOfLocalVar =
     returnStmt(
-      hasReturnValue(RefToSharedPtrLocal));
+      hasReturnValue(RefToLocalVar));
 
-  auto IsInCompilerStd =
-    allOf(
-      isInStdNamespace(),
-      isExpansionInSystemHeader());
-
-  auto CalleeIsSafe =
-    callee(
-      declRefExpr(
-        to(
-          anyOf(
-            functionDecl(IsInCompilerStd),
-            cxxMethodDecl(
-              ofClass(
-                decl(IsInCompilerStd)))))));
-
+  // Function calls are never safe for our conservative analysis
+  auto CalleeIsSafe = unless(anything());
+  
   auto FunctionEscapePoint =
     callExpr(
+      callee(
+        declRefExpr(
+          to(
+            functionDecl(
+              unless(cxxMethodDecl()))))),
       hasAnyArgument(
-        RefToSharedPtrLocal),
+        RefToLocalVar),
       unless(CalleeIsSafe));
 
   auto MemberCalleeIsSafe =
-    has(
-      memberExpr(
-        hasDeclaration(
-          cxxMethodDecl(
-            unless(
-              anyOf(
-                hasName("use_count"),
-                hasName("unique"),
-                hasName("owner_before")))))));
+    allOf(
+      onImplicitObjectArgument(RefToLocalVar),
+      has(
+        memberExpr(
+          hasDeclaration(
+            cxxMethodDecl(
+              unless(
+                anyOf(
+                  hasName("use_count"),
+                  hasName("unique"),
+                  hasName("owner_before"))))))));
 
   auto MemberCallEscapePoint =
     cxxMemberCallExpr(
-      onImplicitObjectArgument(
-        hasType(SharedPtrDecl)),
-      hasDescendant(RefToSharedPtrLocal.bind("refToLocal")),
+      hasDescendant(RefToLocalVar),
       unless(MemberCalleeIsSafe));
+  
+  auto CallsMethodOfInstantiatedClassTemplate =
+    has(
+      declRefExpr(
+        to(
+          cxxMethodDecl(
+            ofClass(
+              classTemplateSpecializationDecl(
+                hasSpecializedTemplate(
+                  classTemplateDecl().bind(operatorClassTemplate))))))));
+
+  auto IsCalledOnVarOfTypeEqualToOrDerivedFromInstantiatedClassTemplate =
+    has(
+      declRefExpr(
+        to(
+          varDecl(
+            equalsBoundNode(localVar),
+            hasType(
+              classTemplateSpecializationDecl(
+                hasSpecializedTemplate(
+                  classTemplateDecl(
+                    anyOf(
+                      equalsBoundNode(operatorClassTemplate),
+                      has(
+                        cxxRecordDecl(
+                          hasAnyBase(
+                            cxxBaseSpecifier(
+                              hasType(
+                                classTemplateDecl(equalsBoundNode(operatorClassTemplate))))))))))))))));
+
+  auto OperatorCallIsSafe =
+    allOf(
+      CallsMethodOfInstantiatedClassTemplate,
+      IsCalledOnVarOfTypeEqualToOrDerivedFromInstantiatedClassTemplate);
+
+  auto OperatorCallEscapePoint =
+    cxxOperatorCallExpr(
+      anyOf(
+        hasEitherOperand(RefToLocalVar),
+        hasUnaryOperand(RefToLocalVar)),
+      unless(OperatorCallIsSafe));
 
   auto HasEscapePoint =
     anyOf(
       hasDescendant(FunctionEscapePoint),
-      hasDescendant(MemberCallEscapePoint));
+      hasDescendant(MemberCallEscapePoint),
+      hasDescendant(OperatorCallEscapePoint));
 
   auto HasEscapingReturnedSharedPtrVar =
     allOf(
-      forEachDescendant(SharedPtrLocal),
-      hasDescendant(ReturnedSharedPtrLocal),
+      forEachDescendant(LocalVar),
+      hasDescendant(ReturnOfLocalVar),
       HasEscapePoint);
 
   auto CandidateFunction =
     functionDecl(
       ReturnsSharedPtr,
+      unless(ReturnsFunctionParameter),
       unless(HasEscapingReturnedSharedPtrVar)).bind(candidateFunction);
   
   auto RuleRewriteReturnedMakeShared =

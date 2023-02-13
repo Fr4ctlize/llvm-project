@@ -137,9 +137,9 @@ extern volatile int ZirconModuleAnchorSource;
 static int LLVM_ATTRIBUTE_UNUSED ZirconModuleAnchorDestination =
     ZirconModuleAnchorSource;
 
-extern volatile int TFGModuleAnchorSource;
-static int LLVM_ATTRIBUTE_UNUSED TFGModuleAnchorDestination =
-    TFGModuleAnchorSource;
+extern volatile int PointerUsageModuleAnchorSource;
+static int LLVM_ATTRIBUTE_UNUSED PointerUsageModuleAnchorDestination =
+    PointerUsageModuleAnchorSource;
 
 } // namespace clang::tidy
 

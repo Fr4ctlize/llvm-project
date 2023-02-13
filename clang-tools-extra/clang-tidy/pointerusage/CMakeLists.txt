@@ -3,9 +3,10 @@ set(LLVM_LINK_COMPONENTS
   Support
   )
 
-add_clang_library(clangTidyTFGModule
-  NoReturnPositionMakeSharedCheck.cpp
-  TFGTidyModule.cpp
+add_clang_library(clangTidyPointerUsageModule
+  SharedPtrFactoryFunctionCheck.cpp
+  PointerUsageTidyModule.cpp
+  SharedptrfunctionparameterCheck.cpp
 
   LINK_LIBS
   clangTidy

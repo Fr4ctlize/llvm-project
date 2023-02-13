@@ -7268,6 +7268,20 @@ AST_TYPE_TRAVERSE_MATCHER(hasUnderlyingType, getUnderlyingType,
                           AST_POLYMORPHIC_SUPPORTED_TYPES(DecltypeType,
                                                           UsingType));
 
+/// Matches \c QualType nodes if the underlying unqualified type.
+///
+/// Given
+/// \code
+///   int[] a;
+/// \endcode
+/// varDecl(hasType(hasUnderlyingUnqualifiedType(arrayType())))
+///   matches the type of "a"
+///
+/// Usable as: Matcher<QualType>
+AST_MATCHER_P(QualType, hasUnderlyingUnqualifiedType, internal::Matcher<Type>, InnerMatcher) {
+  return InnerMatcher.matches(*Node, Finder, Builder);
+}
+
 /// Matches \c FunctionType nodes.
 ///
 /// Given

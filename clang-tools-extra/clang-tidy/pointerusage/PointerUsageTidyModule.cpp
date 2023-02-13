@@ -9,30 +9,33 @@
 #include "../ClangTidy.h"
 #include "../ClangTidyModule.h"
 #include "../ClangTidyModuleRegistry.h"
-#include "NoReturnPositionMakeSharedCheck.h"
+#include "SharedPtrFactoryFunctionCheck.h"
+#include "SharedptrfunctionparameterCheck.h"
 
 namespace clang {
 namespace tidy {
-namespace tfg {
+namespace pointerusage {
 
 /// A module containing checks of the C++ Core Guidelines
-class TFGModule : public ClangTidyModule {
+class PointerUsageModule : public ClangTidyModule {
 public:
   void addCheckFactories(ClangTidyCheckFactories &CheckFactories) override {
-    CheckFactories.registerCheck<NoReturnPositionMakeSharedCheck>(
-        "tfg-NoReturnPositionMakeShared");
+    CheckFactories.registerCheck<SharedPtrFactoryFunctionCheck>(
+        "pointerusage-SharedPtrFactoryFunction");
+    CheckFactories.registerCheck<SharedptrfunctionparameterCheck>(
+        "pointerusage-SharedPtrFunctionParameter");
   }
 };
 
 // Register the LLVMTidyModule using this statically initialized variable.
-static ClangTidyModuleRegistry::Add<TFGModule>
-    X("tfg-module", "Adds checks developed in Francisco Ortiz's Undergraduate Degree Project.");
+static ClangTidyModuleRegistry::Add<PointerUsageModule>
+    X("pointerusage-module", "Adds checks for encouraging better use of smart pointers.");
 
-} // namespace tfg
+} // namespace pointerusage
 
 // This anchor is used to force the linker to link in the generated object file
-// and thus register the TFGModule.
-volatile int TFGModuleAnchorSource = 0;
+// and thus register the PointerUsageModule.
+volatile int PointerUsageModuleAnchorSource = 0;
 
 } // namespace tidy
 } // namespace clang

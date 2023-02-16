@@ -31,26 +31,21 @@ namespace pointerusage {
 
 RewriteRuleWith<std::string> makeSharedPtrFactoryFunctionRewriteRule() {
   const auto meta = cat("prefer ``unique_ptr`` over ``shared_ptr`` as a return type for factory functions");
-  const std::string IdSharedPtr = "::std::shared_ptr",
-                    IdMakeShared = "::std::make_shared",
-                    IdOperatorEq = "operator=",
-                    IdMakeSharedInvocation = "makeSharedInvocation",
+  const std::string IdMakeSharedInvocation = "makeSharedInvocation",
                     IdVarTypeSpec = "varTypeSpec",
                     IdFuncTypeSpec = "funcTypeSpec",
                     IdReturnedVar = "returnedVar",
                     IdCandidateFunction = "candidateFunction",
-                    IdMakeUnique = "make_unique",
-                    uniquePtrName = "unique_ptr",
                     IdLocalVar = "localVar";
 
   auto SharedPtrDecl =
-    cxxRecordDecl(hasName(IdSharedPtr));
+    cxxRecordDecl(hasName("::std::shared_ptr"));
 
   auto MakeSharedDecl =
-    functionDecl(hasName(IdMakeShared));
+    functionDecl(hasName("::std::make_shared"));
 
   auto OperatorEqualsDecl =
-    functionDecl(hasName(IdOperatorEq));
+    functionDecl(hasName("operator="));
 
   auto MakeSharedCallExpr =
     callExpr(
@@ -264,24 +259,24 @@ RewriteRuleWith<std::string> makeSharedPtrFactoryFunctionRewriteRule() {
   auto RuleRewriteReturnedMakeShared =
     makeRule(
       traverse(TK_IgnoreUnlessSpelledInSource, ReturnsMakeShared),
-      changeTo(name(IdMakeSharedInvocation), cat(IdMakeUnique)));
+      changeTo(name(IdMakeSharedInvocation), cat("make_unique")));
   
   auto RuleRewriteVarTypeAndInitMakeShared =
     makeRule(
       traverse(TK_IgnoreUnlessSpelledInSource, ReturnedSharedPtrVarInit),
       flatten(
-        edit(changeTo(name(IdMakeSharedInvocation), cat(IdMakeUnique))),
-        ifBound(IdVarTypeSpec, changeTo(name(IdVarTypeSpec), cat(uniquePtrName)))));
+        edit(changeTo(name(IdMakeSharedInvocation), cat("make_unique"))),
+        ifBound(IdVarTypeSpec, changeTo(name(IdVarTypeSpec), cat("unique_ptr")))));
   
   auto RuleRewriteVarAssignedMakeShared =
     makeRule(
       traverse(TK_IgnoreUnlessSpelledInSource, ReturnedSharedPtrVarAssignment),
-      edit(changeTo(name(IdMakeSharedInvocation), cat(IdMakeUnique))));
+      edit(changeTo(name(IdMakeSharedInvocation), cat("make_unique"))));
 
   auto RuleReplaceSharedWithUniqueInFactoryFunction = makeRule(
     traverse(TK_IgnoreUnlessSpelledInSource, CandidateFunction),
     flattenVector({
-      ifBound(IdFuncTypeSpec, changeTo(name(IdFuncTypeSpec), cat(uniquePtrName))),
+      ifBound(IdFuncTypeSpec, changeTo(name(IdFuncTypeSpec), cat("unique_ptr"))),
       rewriteDescendants(IdCandidateFunction, RuleRewriteReturnedMakeShared),
       rewriteDescendants(IdCandidateFunction, RuleRewriteVarTypeAndInitMakeShared),
       rewriteDescendants(IdCandidateFunction, RuleRewriteVarAssignedMakeShared)}),
@@ -294,7 +289,7 @@ RewriteRuleWith<std::string> makeSharedPtrFactoryFunctionRewriteRule() {
 
 SharedPtrFactoryFunctionCheck::SharedPtrFactoryFunctionCheck(StringRef Name, ClangTidyContext *Context)
   : TransformerClangTidyCheck(Name, Context) {
-    setRule(makeSharedPtrFactoryFunctionRewriteRule());
+  setRule(makeSharedPtrFactoryFunctionRewriteRule());
 }
 
 } // namespace pointerusage

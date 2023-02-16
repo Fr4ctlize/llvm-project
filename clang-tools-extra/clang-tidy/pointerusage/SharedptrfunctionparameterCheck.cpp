@@ -31,12 +31,7 @@ namespace pointerusage {
 
 RewriteRuleWith<std::string> makeSharedPtrFucnctionParameterRewriteRule() {
   const auto meta = cat("use T* or T& to indicate non-owning function arguments instead of ``shared_ptr<T>``");
-  const std::string IdSharedPtr = "::std::shared_ptr",
-                    IdOperatorDeref = "operator*",
-                    IdOperatorArrow = "operator->",
-                    IdOperatorIndex = "operator[]",
-                    IdMemberGet = "get",
-                    IdCallToMemberGet = "callToMemberGet",
+  const std::string IdCallToMemberGet = "callToMemberGet",
                     IdCandidateParam = "candidateParam",
                     IdParamRef = "paramRef",
                     IdArrayElementType = "arrayElementType",
@@ -44,7 +39,7 @@ RewriteRuleWith<std::string> makeSharedPtrFucnctionParameterRewriteRule() {
                     IdInnerParamTypeSpec = "innerParamTypeSpec",
                     IdParentFunction = "parentFunction";
 
-  auto SharedPtrDecl = cxxRecordDecl(hasName(IdSharedPtr));
+  auto SharedPtrDecl = cxxRecordDecl(hasName("::std::shared_ptr"));
 
   auto RefToParam = declRefExpr(
     to(
@@ -62,14 +57,17 @@ RewriteRuleWith<std::string> makeSharedPtrFucnctionParameterRewriteRule() {
     hasAnyArgument(
       RefToParam),
     unless(CalleeIsSafe));
-      
-  auto MemberCalleeIsSafe = allOf(
-    onImplicitObjectArgument(RefToParam),
+  
+  auto HasRefToMemberFunctionGet =
     has(
       memberExpr(
         hasDeclaration(
           cxxMethodDecl(
-            hasName(IdMemberGet))))));
+            hasName("get")))));
+      
+  auto MemberCalleeIsSafe = allOf(
+    onImplicitObjectArgument(RefToParam),
+    HasRefToMemberFunctionGet);
 
   auto MemberCallEscapePoint = cxxMemberCallExpr(
     hasDescendant(RefToParam),
@@ -80,9 +78,9 @@ RewriteRuleWith<std::string> makeSharedPtrFucnctionParameterRewriteRule() {
       to(
         cxxMethodDecl(
           anyOf(
-            hasName(IdOperatorDeref),
-            hasName(IdOperatorArrow),
-            hasName(IdOperatorIndex))))));
+            hasName("operator*"),
+            hasName("operator->"),
+            hasName("operator[]"))))));
 
   auto OperatorCallEscapePoint = cxxOperatorCallExpr(
     anyOf(
@@ -101,11 +99,7 @@ RewriteRuleWith<std::string> makeSharedPtrFucnctionParameterRewriteRule() {
 
   auto CallToMemberFunctionGet = cxxMemberCallExpr(
     onImplicitObjectArgument(RefToParam.bind(IdParamRef)),
-    has(
-      memberExpr(
-        hasDeclaration(
-          cxxMethodDecl(
-            hasName(IdMemberGet))))));
+    HasRefToMemberFunctionGet);
     
   auto BindArrayType = hasType(
     hasUnderlyingUnqualifiedType(

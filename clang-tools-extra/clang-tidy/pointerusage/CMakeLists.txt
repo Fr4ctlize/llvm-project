@@ -6,6 +6,7 @@ set(LLVM_LINK_COMPONENTS
 add_clang_library(clangTidyPointerUsageModule
   SharedPtrFactoryFunctionCheck.cpp
   PointerUsageTidyModule.cpp
+  SharedptrdatamemberCheck.cpp
   SharedptrfunctionparameterCheck.cpp
 
   LINK_LIBS

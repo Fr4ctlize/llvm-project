@@ -187,6 +187,11 @@ New checks
   Replaces certain conditional statements with equivalent calls to
   ``std::min`` or ``std::max``.
 
+- New :doc:`pointerusage-SharedPtrDataMember
+  <clang-tidy/checks/pointerusage/SharedPtrDataMember>` check.
+
+  FIXME: add release notes.
+
 - New :doc:`pointerusage-SharedPtrFunctionParameter
   <clang-tidy/checks/pointerusage/SharedPtrFunctionParameter>` check.
 

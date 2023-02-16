@@ -1,31 +1,31 @@
 #include <memory>
 
 class A {
-    std::shared_ptr<int> p;
+    std::unique_ptr<int> p;
 };
 
 class B {
-    std::shared_ptr<int> p1;
-    std::shared_ptr<int> p2;
+    std::unique_ptr<int> p1;
+    std::unique_ptr<int> p2;
 };
 
 class C {
     C(int x) {
-        p = std::make_shared<int>(x);
+        p = std::make_unique<int>(x);
     }
     void update(int x) {
-        p = std::make_shared<int>(42);
+        p = std::make_unique<int>(42);
     }
-    std::shared_ptr<int> p;
+    std::unique_ptr<int> p;
 };
 
 class D {
     D(int x, int y) {
-        p1 = std::make_shared<int>(x);
-        p2 = std::make_shared<int>(y);
+        p1 = std::make_unique<int>(x);
+        p2 = std::make_unique<int>(y);
     }
-    std::shared_ptr<int> p1;
-    std::shared_ptr<int> p2;
+    std::unique_ptr<int> p1;
+    std::unique_ptr<int> p2;
 };
 
 class E {
@@ -34,7 +34,7 @@ public:
 protected:
     std::shared_ptr<int> p2;
 private:
-    std::shared_ptr<int> p3;
+    std::unique_ptr<int> p3;
 };
 
 template<typename T>
@@ -78,9 +78,9 @@ class H {
     auto dataMemberPassedToOperatorSubscript() {
         p3[0] = 42;
     }
-    std::shared_ptr<I> p1;
-    std::shared_ptr<I> p2;
-    std::shared_ptr<int[]> p3;
+    std::unique_ptr<I> p1;
+    std::unique_ptr<I> p2;
+    std::unique_ptr<int[]> p3;
 };
 
 class J {

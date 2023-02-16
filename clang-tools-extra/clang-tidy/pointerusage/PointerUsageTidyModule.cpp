@@ -10,6 +10,7 @@
 #include "../ClangTidyModule.h"
 #include "../ClangTidyModuleRegistry.h"
 #include "SharedPtrFactoryFunctionCheck.h"
+#include "SharedptrdatamemberCheck.h"
 #include "SharedptrfunctionparameterCheck.h"
 
 namespace clang {
@@ -20,6 +21,8 @@ namespace pointerusage {
 class PointerUsageModule : public ClangTidyModule {
 public:
   void addCheckFactories(ClangTidyCheckFactories &CheckFactories) override {
+    CheckFactories.registerCheck<SharedptrdatamemberCheck>(
+        "pointerusage-SharedPtrDataMember");
     CheckFactories.registerCheck<SharedPtrFactoryFunctionCheck>(
         "pointerusage-SharedPtrFactoryFunction");
     CheckFactories.registerCheck<SharedptrfunctionparameterCheck>(
